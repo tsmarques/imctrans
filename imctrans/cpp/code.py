@@ -324,7 +324,7 @@ def gen_message_files(consts, dest_folder, root, abbrevs, xml_md5):
 def gen_factory_file(root, xml_md5, dest_folder, fname):
     f = utils.File(fname, dest_folder, ns=False, md5=xml_md5)
     for msg in root.findall('message'):
-        f.append('MESSAGE(%(id)s, %(abbrev)s)' % msg.attrib)
+        f.append('MESSAGE(%s, %s, \"%s\")' % (msg.get('id'), msg.get('abbrev'), utils.xml_node_md5(msg)))
     f.append('#undef MESSAGE')
     f.write()
 
@@ -485,7 +485,6 @@ def main(xml, out_folder, no_base, force):
     gen_constants_file(consts, xml_md5, dest_folder, 'Constants.hpp')
     gen_header_file(root, xml_md5, dest_folder, 'Header.hpp')
     gen_factory_file(root, xml_md5, dest_folder, 'Factory.xdef')
-    gen_messages_md5(root, xml_md5, dest_folder, 'MessagesMD5.hpp')
     gen_macros_file(root, xml_md5, dest_folder, 'Macros.hpp')
     blob.create_imc_blob(xml, dest_folder, 'Blob.hpp', force)
 

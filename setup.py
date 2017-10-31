@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='imctrans',
-      version='0.1.3',
+      version='0.1.4',
       description='IMC Bindings Generator',
       url='http://github.com/oceanscan/imctrans',
       author='Ricardo Martins',

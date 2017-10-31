@@ -47,21 +47,21 @@ namespace IMC
 
   static std::pair<uint32_t, std::string> pairs_id_abbrev[] =
   {
-#define MESSAGE(id, abbrev)                         \
+#define MESSAGE(id, abbrev, md5)                    \
     std::pair<uint32_t, std::string>(id, #abbrev),
 #include <IMC/Spec/Factory.xdef>
   };
 
   static std::pair<std::string, uint32_t> pairs_abbrev_id[] =
   {
-#define MESSAGE(id, abbrev)                         \
+#define MESSAGE(id, abbrev, md5)                    \
     std::pair<std::string, uint32_t>(#abbrev, id),
 #include <IMC/Spec/Factory.xdef>
   };
 
   static std::pair<int, Creator> creator_pairs_id[] =
   {
-#define MESSAGE(id, abbrev)                         \
+#define MESSAGE(id, abbrev, md5)                    \
     std::pair<int, Creator>(id, &create<abbrev>),
 #include <IMC/Spec/Factory.xdef>
   };
