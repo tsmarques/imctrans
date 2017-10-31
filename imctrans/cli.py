@@ -32,7 +32,8 @@ def download(args):
 def main():
     parser = argparse.ArgumentParser(description="IMC Bindings Generator")
 
-    subparsers = parser.add_subparsers(title="Sub-Commands", help='Supported Sub-Commands')
+    subparsers = parser.add_subparsers(title="Commands", dest='command', help='Supported Commands')
+    subparsers.required = True
 
     parser_dl = subparsers.add_parser('download', help='Clone IMC XML from Git Repository')
     parser_dl.set_defaults(func=download)
