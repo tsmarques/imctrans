@@ -19,6 +19,8 @@
 
 import hashlib
 import os.path
+from xml.dom.minidom import Node, parseString
+from xml.etree import ElementTree as Et
 
 BASE_FOLDER = 'Base'
 SPEC_FOLDER = 'Spec'
@@ -528,3 +530,23 @@ class File:
             fd = open(self.path, 'w')
             fd.write(new_text)
             fd.close()
+
+
+def xml_node_remove_blanks(xml_node):
+    for x in xml_node.childNodes:
+        if x.nodeType == Node.TEXT_NODE:
+            if x.nodeValue:
+                x.nodeValue = x.nodeValue.strip()
+        elif x.nodeType == Node.ELEMENT_NODE:
+            xml_node_remove_blanks(x)
+
+
+def xml_node_md5(xml_node):
+    xml = Et.tostring(xml_node, encoding='utf-8')
+    node = parseString(xml)
+    xml_node_remove_blanks(node)
+    node.normalize()
+    text = node.toprettyxml(indent='', newl='', encoding="utf-8")
+    m = hashlib.md5()
+    m.update(text)
+    return m.hexdigest()

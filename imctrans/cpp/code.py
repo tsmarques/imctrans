@@ -16,7 +16,6 @@
 ############################################################################
 # Author: Ricardo Martins                                                  #
 ############################################################################
-
 import os
 import subprocess
 import xml.etree.ElementTree as Et
@@ -422,6 +421,15 @@ def get_git_info(xml):
     return info
 
 
+def gen_messages_md5(root, xml_md5, dest_folder, fname):
+    f = utils.File(fname, dest_folder, ns=False, md5=xml_md5)
+    for msg in root.findall('message'):
+        name = msg.attrib['abbrev'].upper()
+        md5 = utils.xml_node_md5(msg)
+        f.append("#define IMC_%s_MD5 \"%s\"" % (name, md5))
+    f.write()
+
+
 def main(xml, out_folder, no_base, force):
     xml_md5 = utils.compute_md5(xml)
 
@@ -477,6 +485,7 @@ def main(xml, out_folder, no_base, force):
     gen_constants_file(consts, xml_md5, dest_folder, 'Constants.hpp')
     gen_header_file(root, xml_md5, dest_folder, 'Header.hpp')
     gen_factory_file(root, xml_md5, dest_folder, 'Factory.xdef')
+    gen_messages_md5(root, xml_md5, dest_folder, 'MessagesMD5.hpp')
     gen_macros_file(root, xml_md5, dest_folder, 'Macros.hpp')
     blob.create_imc_blob(xml, dest_folder, 'Blob.hpp', force)
 
