@@ -74,3 +74,19 @@ TEST_CASE("serializeHeader")
   REQUIRE(IMC::Packet::serializeHeader(&msg, bfr, sizeof(bfr)) == IMC_CONST_HEADER_SIZE);
 }
 
+TEST_CASE("serializeDeserializeStream")
+{
+  // Serialize.
+  uint8_t bfr[256];
+  IMC::EulerAngles msg;
+  size_t rv = IMC::Packet::serialize(&msg, bfr, sizeof(bfr));
+
+  // Deserialize.
+  std::stringstream ss;
+  ss.write(reinterpret_cast<const char*>(bfr), rv);
+  IMC::Message* actual = IMC::Packet::deserialize(ss);
+  REQUIRE(actual != NULL);
+  REQUIRE(*actual == msg);
+}
+
+
