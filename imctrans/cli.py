@@ -7,7 +7,7 @@ import imctrans.cpp.code
 import imctrans.cpp.tests
 
 # Default Git Repository URL.
-GIT_URL = 'https://www.github.com/LSTS/imc'
+GIT_URL = 'https://www.github.com/oceanscan/imc'
 # Supported output languages.
 LANGS = ['cpp']
 
