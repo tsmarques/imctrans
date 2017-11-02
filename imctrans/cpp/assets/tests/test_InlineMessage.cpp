@@ -54,3 +54,26 @@ TEST_CASE("equalOperatorOneNull")
   REQUIRE(a != b);
 }
 
+TEST_CASE("getNull")
+{
+  IMC::InlineMessage<IMC::EulerAngles> imsg;
+  REQUIRE_THROWS(imsg.get());
+}
+
+TEST_CASE("getId")
+{
+  IMC::InlineMessage<IMC::EulerAngles> imsg;
+  REQUIRE(imsg.getId() == IMC::Message::nullId());
+
+  IMC::EulerAngles msg;
+  imsg.set(msg);
+  REQUIRE(imsg.getId() == msg.getId());
+}
+
+TEST_CASE("setByPointerCompareDereference")
+{
+  IMC::InlineMessage<IMC::EulerAngles> imsg;
+  IMC::EulerAngles msg;
+  imsg.set(&msg);
+  REQUIRE(*imsg == msg);
+}
