@@ -27,7 +27,7 @@ project("IMC")
 set(CMAKE_CXX_STANDARD 98)
 
 set(IMC_TAG "master" CACHE STRING "IMC git branch name, commit id or tag")
-set(IMC_URL "git@gitlab.com:omst/imc" CACHE STRING "IMC git URL")
+set(IMC_URL "https://github.com/oceanscan/imc" CACHE STRING "IMC git URL")
 
 # Set a default build type if none was specified.
 if(COVERAGE)
@@ -121,6 +121,22 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   if(CMAKE_COMPILER_IS_GNUCXX)
     SET(CMAKE_CXX_FLAGS "-g -O0 -fprofile-arcs -ftest-coverage")
   endif()
+endif()
+
+##########################################################################
+#                            Compiler Flags                              #
+##########################################################################
+
+include(CheckCXXCompilerFlag)
+
+check_cxx_compiler_flag(-Wextra _cc_wextra)
+if(_cc_wextra)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wextra")
+endif()
+
+check_cxx_compiler_flag(-pedantic _cc_pedantic)
+if(_cc_pedantic)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
 endif()
 
 ##########################################################################
