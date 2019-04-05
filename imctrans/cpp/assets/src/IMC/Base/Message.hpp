@@ -32,6 +32,8 @@
 #include "Exceptions.hpp"
 #include "Clock.hpp"
 
+#define IMC_VERSION_HAS_GETFLATNUMERICSMAP 1
+
 // IMC API headers.
 #include <IMC/Spec/Constants.hpp>
 #include <IMC/Spec/Header.hpp>
