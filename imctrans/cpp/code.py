@@ -173,6 +173,29 @@ class Message:
                 f.body('value = static_cast<{0}>(val);'.format(utils.get_cxx_type(value)))
             public.append(f)
 
+        valid_numeric_types = ['int8_t', 'uint8_t', 'int16_t', 'uint16_t',
+                               'int32_t', 'uint32_t', 'int64_t', 'uint64_t',
+                               'fp32_t', 'fp64_t']
+        units_bitfield = ['Bitfield', ]
+        units_enum     = ['Enumerated', ]
+
+        # getFlatNumericsMap
+        f = utils.Function('getFlatNumericsMap', 'std::map<std::string, double>', const=True, inline=True)
+        f.add_body('std::map<std::string, double> output;')
+        if self.has_fields():
+            for field in node.findall('field'):
+                if field.get('unit') in units_bitfield + units_enum:
+                    continue
+
+                if field.get('type') in valid_numeric_types:
+                    f.add_body('output.insert(std::pair<std::string, double>'
+                               '("{abbrev}", static_cast<double>({abbrev_lowercase})));'
+                               .format(abbrev=field.get('abbrev'), abbrev_lowercase=field.get('abbrev').lower()))
+
+        f.add_body('return output;\n')
+        f.add_body('')
+        public.append(f)
+
         # fieldsToJSON()
         if self.has_fields():
             f = utils.Function('fieldsToJSON', 'void',
@@ -299,7 +322,7 @@ def gen_message_files(consts, dest_folder, root, abbrevs, xml_md5):
         msg_deps = utils.get_first_level_deps(root, abbrev)
 
         hpp = utils.File("%s.hpp" % abbrev, dest_folder, ns=True, md5=xml_md5)
-        hpp.add_isoc_headers('ostream', 'string', 'vector')
+        hpp.add_isoc_headers('ostream', 'string', 'vector', 'map')
         hpp.add_imc_headers('%s/Config.hpp' % utils.BASE_FOLDER,
                             '%s/Message.hpp' % utils.BASE_FOLDER,
                             '%s/InlineMessage.hpp' % utils.BASE_FOLDER,

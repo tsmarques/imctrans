@@ -23,6 +23,7 @@
 #include <iomanip>
 #include <cstring>
 #include <sstream>
+#include <map>
 
 // IMC headers.
 #include "Config.hpp"
@@ -30,6 +31,8 @@
 #include "JSON.hpp"
 #include "Exceptions.hpp"
 #include "Clock.hpp"
+
+#define IMC_VERSION_HAS_GETFLATNUMERICSMAP 1
 
 // IMC API headers.
 #include <IMC/Spec/Constants.hpp>
@@ -233,6 +236,15 @@ namespace IMC
     setValueFP(double val)
     {
       (void)val;
+    }
+
+    //! Get a map containing the first non-nested numerical values
+    //! that are not enumerations or bitfields
+    //! @return flat map<std::string, double>
+    virtual std::map<std::string, double>
+    getFlatNumericsMap(void) const
+    {
+        return std::map<std::string, double>();
     }
 
     //! Compute the amount of bytes required to properly serialize
