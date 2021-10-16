@@ -5,11 +5,14 @@ import subprocess
 
 import imctrans.cpp.code
 import imctrans.cpp.tests
+import imctrans.rust.code
 
 # Default Git Repository URL.
+import imctrans
+
 GIT_URL = 'https://www.github.com/oceanscan/imc'
 # Supported output languages.
-LANGS = ['cpp']
+LANGS = ['cpp', 'rust']
 
 
 def trans(args):
@@ -17,6 +20,8 @@ def trans(args):
         imctrans.cpp.code.main(args.xml, args.output_folder, args.no_base, args.force)
         if args.output_test is not None:
             imctrans.cpp.tests.gen_test_file(args.xml, args.output_test, args.force)
+    if args.language == 'rust':
+        imctrans.rust.code.main(args.xml, args.output_folder, args.no_base, args.force)
 
 
 def download(args):
