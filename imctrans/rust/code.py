@@ -548,18 +548,6 @@ def gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5):
                                                field.get('name'),
                                                "u32"))
         f.append(bitf)
-
-    f.append("pub mod utils {")
-    f.append("use std::time::{SystemTime, UNIX_EPOCH};\n\n")
-
-    fn = utils.Function(name="get_timestamp_secs", rett="f64", crate_public=True)
-    fn.body("SystemTime::now()\n"
-            ".duration_since(UNIX_EPOCH)\n"
-            ".expect(\"failed to get timestamp\")\n"
-            ".as_secs_f64()\n"
-            "}\n")
-
-    f.text += str(fn)
     f.write()
 
 
