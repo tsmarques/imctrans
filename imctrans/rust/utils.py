@@ -197,24 +197,55 @@ def get_msg_groups(root, abbrev):
     return []
 
 
-def get_cxx_type(field_node):
-    """Retrieve the C++ type of a message field node"""
+def get_rust_types(root, field_node):
+    """Retrieve the Rust type of a message field node"""
     xtype = field_node.get('type')
     msg_type = field_node.get('message-type', 'Message')
     if xtype == 'plaintext':
-        return 'std::string'
+        return 'String'
     elif xtype == 'rawdata':
-        return 'std::vector<char>'
+        return 'Vec<u8>'
     elif xtype == 'message':
-        return 'InlineMessage<%s>' % msg_type
+        if len(get_msg_groups(root, msg_type)) == 0:
+            return 'Option<Box<%s>>' % msg_type
+        else:
+            return 'Option<Box<dyn Message>>'
     elif xtype == 'message-list':
-        return 'MessageList<%s>' % msg_type
+        if len(get_msg_groups(root, msg_type)) == 0:
+            return 'MessageList<Box<%s>>' % msg_type
+        else:
+            return 'MessageList<Box<dyn Message>>'
     elif xtype == 'fp64_t':
-        return 'double'
+        return 'f64'
     elif xtype == 'fp32_t':
-        return 'float'
+        return 'f32'
+    elif xtype == 'uint8_t':
+        return 'u8'
+    elif xtype == "uint16_t":
+        return 'u16'
+    elif xtype == 'uint32_t':
+        return 'u32'
+    elif xtype == 'uint64_t':
+        return 'u64'
+    elif xtype == 'int8_t':
+        return 'i8'
+    elif xtype == "int16_t":
+        return 'i16'
+    elif xtype == 'int32_t':
+        return 'i32'
+    elif xtype == 'int64_t':
+        return 'i64'
     else:
         return xtype
+
+
+def get_field_initial_value(root, field_node):
+    """Retrieve the initial value of a message field node"""
+    dvalue = field_node.get('value')
+    if dvalue is None:
+        return "Default::default()"
+
+    return dvalue + '_' + get_rust_types(root, field_node)
 
 
 def is_fixed(field_node):
@@ -272,23 +303,33 @@ class Var:
         self._data = {'name': name, 'type': xtype, 'desc': desc}
 
     def as_func_arg(self):
-        return '%(type)s %(name)s' % self._data
+        return '%(name)s :%(type)s' % self._data
 
     def as_decl(self):
         return comment(self._data['desc']) + \
-               '%(type)s %(name)s;' % self._data
+               'let %(name)s :%(type)s;' % self._data
 
     def __str__(self):
-        return '%(type)s %(name)s' % self._data
+        return '%(name)s :%(type)s ' % self._data
 
 
 class StructField:
-    def __init__(self, name, xtype, desc):
-        self._data = {'name': name, 'type': xtype, 'desc': desc}
+    def __init__(self, name, xtype, desc, defvalue):
+        if defvalue is None:
+            default_value = "default::Default()"
+        else:
+            default_value = defvalue
+        self._data = {'name': name, 'type': xtype, 'desc': desc, 'default': default_value}
 
     def __str__(self):
         return comment(self._data['desc']) + \
-               '%(type)s %(name)s' % self._data
+               'pub _%(name)s: %(type)s' % self._data
+
+    def as_field_initialization(self):
+        return '_%(name)s: %(default)s' % self._data
+
+    def as_reset(self):
+        return '_%(name)s = %(default)s' % self._data
 
 
 class Struct:
@@ -296,13 +337,32 @@ class Struct:
         self._name = name
         self._desc = desc
         self._fields = []
+        self._properties = []
 
     def add_field(self, field):
         self._fields.append(field)
 
+    def add_property(self, prop):
+        self._properties.append(prop)
+
+    def get_default_initialization(self):
+        ret = []
+        for field in self._fields:
+            ret.append(field.as_field_initialization())
+
+        return ret
+
+    def get_reset(self):
+        ret = []
+        for field in self._fields:
+            ret.append(field.as_reset())
+
+        return ret
+
     def __str__(self):
         out = comment(self._desc)
-        out += 'struct ' + self._name + '\n'
+        out += '\n'.join([f for f in self._properties]) + '\n'
+        out += 'pub struct ' + self._name + '\n'
         out += '{\n'
         out += ';\n'.join([str(f) for f in self._fields]) + ';\n'
         out += '};\n'
@@ -377,32 +437,32 @@ class Bitfield:
 
 
 class Function:
-    def __init__(self, name, rett=None, args=None, const=False, inline=False, static=False):
+    def __init__(self, name, is_method=False, const=True, rett=None, args=None, inline=False, static=False,
+                 private=True, crate_public=False):
         self._data = {}
         self._name = name
+        self._is_method = is_method
+        self._const = const
         self._rett = rett
         self._args = args
-        self._const = const
         self._inline = inline
         self._body = ''
         self._class = None
         self._static = static
+        self._private = private
+        self._crate_public = crate_public
+        self._args_str = ''
 
-        if self._args is None:
-            self._args_str = 'void'
-        else:
-            self._args_str = ', '.join([v.as_func_arg() for v in self._args])
+        if self._is_method and self._const:
+            self._args_str = '&mut self, '
+        elif self._is_method:
+            self._args_str = '&self, '
 
-        if self._const:
-            self._const_str = ' const'
-        else:
-            self._const_str = ''
+        if self._args is not None:
+            self._args_str += ', '.join([v.as_func_arg() for v in self._args])
 
     def is_inline(self):
         return self._inline
-
-    def set_class(self, name):
-        self._class = name
 
     def body(self, text):
         self._body = text
@@ -419,23 +479,30 @@ class Function:
         if self._rett is not None:
             out += self._rett + '\n'
 
-        return out + self._name + '(' + self._args_str + ')' + self._const_str + ';\n'
+        return out + self._name + '(' + self._args_str + ')' + ';\n'
 
     def __str__(self):
         out = ''
 
+        if self._inline:
+            out += '#[inline(always)]\n'
+
         if self._static:
             out += 'static '
 
-        if self._rett is not None:
-            out += self._rett + '\n'
-
-        if self._class is not None:
-            name = self._class + '::' + self._name
+        if self._private:
+            out += "fn "
+        elif self._crate_public:
+            out += "pub(crate) fn "
         else:
-            name = self._name
+            out += "pub fn "
 
-        return out + name + '(' + self._args_str + ')' + self._const_str + '\n' + '{\n' + self._body + '\n}\n'
+        if self._rett is not None:
+            rett_str = " -> " + self._rett
+        else:
+            rett_str = ''
+
+        return out + self._name + '(' + self._args_str + ')' + rett_str + ' {\n' + self._body + '\n}\n'
 
 
 class Dependencies:

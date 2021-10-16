@@ -19,8 +19,10 @@
 import os
 import subprocess
 import xml.etree.ElementTree as Et
+from copyreg import constructor
 
-from . import blob, base, utils
+from . import utils
+from .utils import get_rust_types
 
 
 class Message:
@@ -54,7 +56,7 @@ class Message:
         public.append(f)
 
         # clone()
-        f = utils.Function('clone', '%(abbrev)s*' % node.attrib, const=True, inline=True)
+        f = utils.Function('clone', '%(abbrev)s*' % node.attrib, inline=True)
         f.body('return new %(abbrev)s(*this);' % node.attrib)
         public.append(f)
 
@@ -65,7 +67,7 @@ class Message:
 
         # fieldsEqual()
         if self.has_fields():
-            f = utils.Function('fieldsEqual', 'bool', [utils.Var('msg__', 'const Message&')], const=True, inline=True)
+            f = utils.Function('fieldsEqual', 'bool', [utils.Var('msg__', 'const Message&')], inline=True)
             f.add_body('const IMC::' + node.get('abbrev') + '& other__ = static_cast<const ' + node.get(
                 'abbrev') + '&>(msg__);')
             f.add_body('\n'.join([utils.get_not_equal(field) for field in node.findall('field')]))
@@ -73,7 +75,7 @@ class Message:
             public.append(f)
 
         # serializeFields()
-        f = utils.Function('serializeFields', 'uint8_t*', [utils.Var('bfr__', 'uint8_t*')], const=True, inline=True)
+        f = utils.Function('serializeFields', 'uint8_t*', [utils.Var('bfr__', 'uint8_t*')], inline=True)
         if self.has_fields():
             f.add_body('uint8_t* ptr__ = bfr__;')
             for field in node.findall('field'):
@@ -121,31 +123,31 @@ class Message:
         public.append(f)
 
         # getId()
-        f = utils.Function('getId', 'uint16_t', const=True, inline=True)
+        f = utils.Function('getId', 'uint16_t', inline=True)
         f.body('return %(abbrev)s::getIdStatic();' % node.attrib)
         public.append(f)
 
         # getName()
-        f = utils.Function('getName', 'const char*', const=True, inline=True)
+        f = utils.Function('getName', 'const char*', inline=True)
         f.body('return "%(abbrev)s";' % node.attrib)
         public.append(f)
 
         # getFixedSerializationSize()
-        f = utils.Function('getFixedSerializationSize', 'size_t', const=True, inline=True)
+        f = utils.Function('getFixedSerializationSize', 'size_t', inline=True)
         f.body('return ' + str(self.get_fixed_size()) + ';')
         public.append(f)
 
         # getVariableSerializationSize()
         var_size = str(self.get_variable_size())
         if var_size != '':
-            f = utils.Function('getVariableSerializationSize', 'size_t', const=True, inline=True)
+            f = utils.Function('getVariableSerializationSize', 'size_t', inline=True)
             f.body('return ' + var_size + ';')
             public.append(f)
 
         subid = node.find("field/[@abbrev='id']")
         if subid is not None and subid.get('type') in consts['fixed_types']:
             # getSubId()
-            f = utils.Function('getSubId', 'uint16_t', const=True, inline=True)
+            f = utils.Function('getSubId', 'uint16_t', inline=True)
             f.body('return id;')
             public.append(f)
 
@@ -156,9 +158,9 @@ class Message:
 
         value = node.find("field/[@abbrev='value']")
         if value is not None and value.get('type') in consts['fixed_types']:
-            is_double = utils.get_cxx_type(value) == 'double'
+            is_double = utils.get_rust_types(root, value) == 'double'
             # getValueFP()
-            f = utils.Function('getValueFP', 'double', const=True, inline=True)
+            f = utils.Function('getValueFP', 'double', inline=True)
             if is_double:
                 f.body('return value;')
             else:
@@ -170,7 +172,7 @@ class Message:
             if is_double:
                 f.body('value = val;')
             else:
-                f.body('value = static_cast<{0}>(val);'.format(utils.get_cxx_type(value)))
+                f.body('value = static_cast<{0}>(val);'.format(utils.get_rust_types(root, value)))
             public.append(f)
 
         valid_numeric_types = ['int8_t', 'uint8_t', 'int16_t', 'uint16_t',
@@ -180,7 +182,7 @@ class Message:
         units_enum = ['Enumerated', ]
 
         # getFlatNumericsMap
-        f = utils.Function('getFlatNumericsMap', 'std::map<std::string, double>', const=True, inline=True)
+        f = utils.Function('getFlatNumericsMap', 'std::map<std::string, double>', inline=True)
         f.add_body('std::map<std::string, double> output;')
         if self.has_fields():
             for field in node.findall('field'):
@@ -200,7 +202,7 @@ class Message:
         if self.has_fields():
             f = utils.Function('fieldsToJSON', 'void',
                                [utils.Var('os__', 'std::ostream&'), utils.Var('nindent__', 'unsigned')],
-                               const=True, inline=True)
+                               inline=True)
             f.add_body(self.fields_to_json())
             public.append(f)
 
@@ -255,7 +257,7 @@ class Message:
             hpp.append(enum)
 
         for f in node.findall('field'):
-            v = utils.Var(utils.get_name(f), utils.get_cxx_type(f), desc=f.get('name'))
+            v = utils.Var(utils.get_name(f), utils.get_rust_types(root, f), desc=f.get('name'))
             hpp.append(v.as_decl())
         hpp.append('')
 
@@ -353,13 +355,48 @@ def gen_factory_file(root, xml_md5, dest_folder, fname):
 
 
 def gen_header_file(root, xml_md5, specs_folder, fname):
-    f = utils.File(fname, specs_folder, ns=True, md5=xml_md5)
-    f.add_imc_headers('%s/Config.hpp' % utils.BASE_FOLDER)
+    f = utils.File(fname, specs_folder, ns=False, md5=xml_md5)
     s = utils.Struct('Header', 'Header format')
     fields = root.findall("header/field")
     for field in fields:
-        s.add_field(utils.StructField(field.get('abbrev'), utils.get_cxx_type(field), field.get('name')))
+        s.add_field(utils.StructField(field.get('abbrev'),
+                                      utils.get_rust_types(root, field),
+                                      field.get('name'),
+                                      utils.get_field_initial_value(root, field)))
     f.append(s)
+
+    f.text += "impl Header {\n"
+
+    constr_arg = utils.Var(name="msg_id", xtype="u16")
+    fn_constructor = utils.Function(name="new", args=[constr_arg], rett="Header", private=False)
+
+    constructor_body = 'let mut header = Header {\n'
+    constructor_body += ',\n'.join(s.get_default_initialization())
+    constructor_body += '\n};\n'
+    constructor_body += '\nheader._mgid = msg_id;\n'
+    constructor_body += 'header'
+
+    fn_constructor.body(constructor_body)
+    f.text += str(fn_constructor) + '\n\n'
+
+    fn_clear = utils.Function(name="clear", is_method=True, private=False)
+    clear_fn_body = ';\n'.join('self.' + f for f in s.get_reset())
+    fn_clear.add_body(clear_fn_body)
+    f.text += str(fn_clear)
+
+    serialize_args = utils.Var(name="bfr", xtype="&mut bytes::BytesMut")
+    fn_serialize = utils.Function(name="serialize", is_method=True, private=False, args=[serialize_args])
+    fn_serialize_body = ''
+    for field in fields:
+        fn_serialize_body += 'bfr.put_' + \
+                             utils.get_rust_types(root, field) + \
+                             '_le(self._' + field.get("abbrev") + ');\n'
+
+    fn_serialize.add_body(fn_serialize_body)
+    f.text += str(fn_serialize)
+
+    # end impl block
+    f.text += '}\n'
     f.write()
 
 
@@ -506,21 +543,16 @@ def gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5):
         f.append(bitf)
 
     f.append("pub mod utils {")
-    f.text += "use std::time::{SystemTime, UNIX_EPOCH};\n\n" \
-              "pub(crate) fn get_timestamp_secs() -> f64 {\n"  \
-              "SystemTime::now()\n" \
-              ".duration_since(UNIX_EPOCH)\n" \
-              ".expect(\"failed to get timestamp\")\n" \
-              ".as_secs_f64()\n"  \
-              "}\n" \
-              "}\n"
+    f.append("use std::time::{SystemTime, UNIX_EPOCH};\n\n")
 
-    # f.add_imc_headers('%s/Config.hpp' % utils.BASE_FOLDER)
-    # s = utils.Struct('Header', 'Header format')
-    # fields = root.findall("header/field")
-    # for field in fields:
-    #     s.add_field(utils.StructField(field.get('abbrev'), utils.get_cxx_type(field), field.get('name')))
-    # f.append(s)
+    fn = utils.Function(name="get_timestamp_secs", rett="f64", crate_public=True)
+    fn.body("SystemTime::now()\n"
+            ".duration_since(UNIX_EPOCH)\n"
+            ".expect(\"failed to get timestamp\")\n"
+            ".as_secs_f64()\n"
+            "}\n")
+
+    f.text += str(fn)
     f.write()
 
 
@@ -570,7 +602,7 @@ def main(xml, out_folder, no_base, force):
     deps = utils.Dependencies(root)
     abbrevs = deps.get_list()
 
-    gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5)
+    #gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5)
 
     # gen_message_files(consts, dest_folder, root, abbrevs, xml_md5)
     #
@@ -579,7 +611,7 @@ def main(xml, out_folder, no_base, force):
     # gen_enumerations_file(root, xml_md5, dest_folder, 'Enumerations.hpp')
     # gen_bitfields_file(root, xml_md5, dest_folder, 'Bitfields.hpp')
     # gen_constants_file(consts, xml_md5, dest_folder, 'Constants.hpp')
-    # gen_header_file(root, xml_md5, dest_folder, 'Header.hpp')
+    gen_header_file(root, xml_md5, dest_folder, 'Header.rs')
     # gen_factory_file(root, xml_md5, dest_folder, 'Factory.xdef')
     # gen_macros_file(root, xml_md5, dest_folder, 'Macros.hpp')
     # blob.create_imc_blob(xml, dest_folder, 'Blob.hpp', force)
