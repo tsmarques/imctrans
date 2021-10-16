@@ -19,10 +19,8 @@
 import os
 import subprocess
 import xml.etree.ElementTree as Et
-from copyreg import constructor
 
 from . import utils
-from .utils import get_rust_types
 
 
 class Message:
@@ -354,9 +352,13 @@ def gen_factory_file(root, xml_md5, dest_folder, fname):
     f.write()
 
 
-def gen_header_file(root, xml_md5, specs_folder, fname):
-    f = utils.File(fname, specs_folder, ns=False, md5=xml_md5)
+def gen_header_file(root, xml_md5, dest_folder, fname):
+    f = utils.File(fname, dest_folder + '/src', ns=False, md5=xml_md5)
+    f.add_rust_header("bytes::BufMut")
+
     s = utils.Struct('Header', 'Header format')
+    s.add_property("#[derive(Default, PartialEq, Debug)]")
+
     fields = root.findall("header/field")
     for field in fields:
         s.add_field(utils.StructField(field.get('abbrev'),
@@ -388,9 +390,14 @@ def gen_header_file(root, xml_md5, specs_folder, fname):
     fn_serialize = utils.Function(name="serialize", is_method=True, private=False, args=[serialize_args])
     fn_serialize_body = ''
     for field in fields:
-        fn_serialize_body += 'bfr.put_' + \
-                             utils.get_rust_types(root, field) + \
-                             '_le(self._' + field.get("abbrev") + ');\n'
+        xtype = utils.get_rust_types(root, field)
+        if xtype == 'u8':
+            ser_str = "bfr.put_u8"
+        elif xtype == 'i8':
+            ser_str = "bfr.put_i8"
+        else:
+            ser_str = "bfr.put_" + xtype + "_le"
+        fn_serialize_body += ser_str + '(self._' + field.get("abbrev") + ');\n'
 
     fn_serialize.add_body(fn_serialize_body)
     f.text += str(fn_serialize)
@@ -491,7 +498,7 @@ def gen_messages_md5(root, xml_md5, dest_folder, fname):
 
 
 def gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5):
-    f = utils.File("lib.rs", "src", ns=False, md5=xml_md5)
+    f = utils.File("lib.rs", dest_folder + "/src", ns=False, md5=xml_md5)
     f.add_macro("#![allow(non_snake_case)]")
     f.add_macro("#![allow(dead_code)]")
 
@@ -558,9 +565,7 @@ def gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5):
 
 def main(xml, out_folder, no_base, force):
     xml_md5 = utils.compute_md5(xml)
-
-    base_folder = os.path.join(out_folder, 'IMC')
-    dest_folder = os.path.join(base_folder, utils.SPEC_FOLDER)
+    dest_folder = out_folder
 
     # Parse XML specification.
     tree = Et.parse(xml)
@@ -602,7 +607,7 @@ def main(xml, out_folder, no_base, force):
     deps = utils.Dependencies(root)
     abbrevs = deps.get_list()
 
-    #gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5)
+    gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5)
 
     # gen_message_files(consts, dest_folder, root, abbrevs, xml_md5)
     #

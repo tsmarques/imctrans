@@ -364,8 +364,8 @@ class Struct:
         out += '\n'.join([f for f in self._properties]) + '\n'
         out += 'pub struct ' + self._name + '\n'
         out += '{\n'
-        out += ';\n'.join([str(f) for f in self._fields]) + ';\n'
-        out += '};\n'
+        out += ',\n'.join([str(f) for f in self._fields]) + ',\n'
+        out += '}\n'
         return out
 
 
@@ -572,8 +572,8 @@ class File:
     def add_custom_type(self, from_type, to_type):
         self.custom_types[from_type] = to_type
 
-    def add_rust_headers(self, *headers):
-        self.rust_hdrs.append(headers)
+    def add_rust_header(self, header):
+        self.rust_hdrs.append(header)
 
     def add_imc_mod(self, mod):
         self.imc_mods.append(mod)
@@ -613,7 +613,8 @@ class File:
 
         if len(self.rust_hdrs) > 0:
             for hdr in self.rust_hdrs:
-                text += 'use ' + hdr + ';\n'
+                type(hdr)
+                text += "use " + hdr + ";\n"
             text += '\n'
 
         if len(self.imc_hdrs) > 0:
@@ -630,21 +631,15 @@ class File:
             text += '}\n'
 
         text += '\n'
-        try:
-            # old_text = open(self.path).read()
-            print(text)
-        except IOError:
-            old_text = ''
-        #
-        # if self._stdout:
-        #     import sys
-        #     sys.stdout.write(new_text)
-        #     return
-        #
-        # if new_text != old_text:
-        #     fd = open(self.path, 'w')
-        #     fd.write(new_text)
-        #     fd.close()
+
+        if self._stdout:
+            import sys
+            sys.stdout.write(text)
+            return
+
+        fd = open(self.path, 'w')
+        fd.write(text)
+        fd.close()
 
 
 def xml_node_remove_blanks(xml_node):
