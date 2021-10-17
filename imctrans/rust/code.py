@@ -32,8 +32,10 @@ class Message:
         rs.add_imc_header("Message::*")
         rs.add_imc_header("Header::Header")
         rs.add_imc_header("packet::ImcError")
-        rs.add_imc_header("packet::*")
-        rs.add_rust_header("bytes::{Buf, BufMut}")
+        rs.add_rust_header("bytes::BufMut")
+
+        if self.has_fields():
+            rs.add_imc_header("packet::*")
 
         # `use (...)`
         fields = node.findall("field")
@@ -128,7 +130,11 @@ class Message:
             fn_var_sersize.body('0\n')
 
         # Serialize fields
-        fn_arg = utils.Var(name='bfr', xtype='&mut bytes::BytesMut')
+        if self.has_fields():
+            fn_arg = utils.Var(name='bfr', xtype='&mut bytes::BytesMut')
+        else:
+            fn_arg = utils.Var(name='_bfr', xtype='&mut bytes::BytesMut')
+
         fn_serialize = utils.Function(name='serialize_fields', is_method=True, args=[fn_arg])
         if self.has_fields():
             for field in node.findall('field'):
@@ -151,7 +157,10 @@ class Message:
         else:
             fn_serialize.add_body('')
 
-        fn_arg = utils.Var(name='bfr', xtype='&mut dyn bytes::Buf')
+        if self.has_fields():
+            fn_arg = utils.Var(name='bfr', xtype='&mut dyn bytes::Buf')
+        else:
+            fn_arg = utils.Var(name='_bfr', xtype='&mut dyn bytes::Buf')
         fn_deserialize = utils.Function(name='deserialize_fields', rett='Result<(), ImcError>', is_method=True,
                                         const=False, args=[fn_arg])
         if self.has_fields():
