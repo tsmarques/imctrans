@@ -138,22 +138,7 @@ class Message:
         fn_serialize = utils.Function(name='serialize_fields', is_method=True, args=[fn_arg])
         if self.has_fields():
             for field in node.findall('field'):
-                xtype = field.get('type')
-                abbrev = field.get('abbrev')
-                if xtype == 'uint8_t' or xtype == 'int8_t':
-                    fn_serialize.add_body(
-                        'bfr.put_' + utils.get_rust_types(root, field) + '(' + 'self._' + utils.get_name(field) + ');')
-                elif xtype == 'plaintext':
-                    fn_serialize.add_body('serialize_bytes!(bfr, self._%s.as_bytes());' % abbrev)
-                elif xtype == 'rawdata':
-                    fn_serialize.add_body('serialize_bytes!(bfr, self._%s.as_slice());' % abbrev)
-                elif xtype == 'message':
-                    fn_serialize.add_body('serialize_inline_message!(bfr, self._%s);' % abbrev)
-                elif xtype == 'message-list':
-                    fn_serialize.add_body('serialize_message_list!(bfr, self._%s);' % abbrev)
-                else:
-                    fn_serialize.add_body(
-                        'bfr.put_' + utils.get_rust_types(root, field) + '_le(self._' + utils.get_name(field) + ');')
+                fn_serialize.add_body(utils.get_field_serialization(root, field))
         else:
             fn_serialize.add_body('')
 
@@ -165,31 +150,7 @@ class Message:
                                         const=False, args=[fn_arg])
         if self.has_fields():
             for field in node.findall('field'):
-                xtype = field.get('type')
-                abbrev = field.get('abbrev')
-                msg_type = utils.get_msg_type(root, field)
-                if xtype == 'uint8_t' or xtype == 'int8_t':
-                    fn_deserialize.add_body(
-                        'self._' + utils.get_name(field) + ' = bfr.get_' + utils.get_rust_types(root, field) + '();')
-                elif xtype == 'plaintext':
-                    fn_deserialize.add_body('deserialize_string!(bfr, self._%s);' % abbrev)
-                elif xtype == 'rawdata':
-                    fn_deserialize.add_body('deserialize_bytes!(bfr, self._%s);' % abbrev)
-                elif xtype == 'message':
-                    if msg_type is None or msg_type == 'Message':
-                        fn_deserialize.add_body('self._%s = deserialize_inline(bfr).ok();' % abbrev)
-                    else:
-                        fn_deserialize.add_body(
-                            ('self._%s = deserialize_inline_as::<' + msg_type + '>' + '(bfr).ok();') % abbrev)
-                elif xtype == 'message-list':
-                    if msg_type is None or msg_type == 'Message':
-                        fn_deserialize.add_body('self._%s = deserialize_message_list(bfr)?;' % abbrev)
-                    else:
-                        fn_deserialize.add_body(
-                            ('self._%s = deserialize_message_list_as::<' + msg_type + '>' + '(bfr)?;') % abbrev)
-                else:
-                    fn_deserialize.add_body(
-                        'self._' + utils.get_name(field) + ' = bfr.get_' + utils.get_rust_types(root, field) + '_le();')
+                fn_deserialize.add_body(utils.get_field_deserialization(root, field))
         else:
             fn_deserialize.add_body('')
 

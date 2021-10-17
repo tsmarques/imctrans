@@ -48,6 +48,7 @@ def comment(text, dox=True, nl='\n'):
         c = '/'
     return '//' + c + ' ' + text + '.' + nl
 
+
 def get_description(desc_tag):
     if desc_tag is None:
         return ''
@@ -60,6 +61,7 @@ def get_description(desc_tag):
         desc += '/// ' + line + '\n'
 
     return desc
+
 
 def get_rust_copyright(xml_md5, skip_md5=False):
     """Extract copyright from this script and convert it to a format suitable to be used in C++ files."""
@@ -220,6 +222,47 @@ def get_rust_types(root, field_node):
         return 'i64'
     else:
         return xtype
+
+
+def get_field_serialization(root, field):
+    xtype = field.get('type')
+    abbrev = field.get('abbrev')
+    if xtype == 'uint8_t' or xtype == 'int8_t':
+        return 'bfr.put_' + get_rust_types(root, field) + '(' + 'self._' + get_name(field) + ');'
+    elif xtype == 'plaintext':
+        return 'serialize_bytes!(bfr, self._%s.as_bytes());' % abbrev
+    elif xtype == 'rawdata':
+        return 'serialize_bytes!(bfr, self._%s.as_slice());' % abbrev
+    elif xtype == 'message':
+        return 'serialize_inline_message!(bfr, self._%s);' % abbrev
+    elif xtype == 'message-list':
+        return 'serialize_message_list!(bfr, self._%s);' % abbrev
+    else:
+        return 'bfr.put_' + get_rust_types(root, field) + '_le(self._' + get_name(field) + ');'
+
+
+def get_field_deserialization(root, field):
+    xtype = field.get('type')
+    abbrev = field.get('abbrev')
+    msg_type = get_msg_type(root, field)
+    if xtype == 'uint8_t' or xtype == 'int8_t':
+        return 'self._' + get_name(field) + ' = bfr.get_' + get_rust_types(root, field) + '();'
+    elif xtype == 'plaintext':
+        return 'deserialize_string!(bfr, self._%s);' % abbrev
+    elif xtype == 'rawdata':
+        return 'deserialize_bytes!(bfr, self._%s);' % abbrev
+    elif xtype == 'message':
+        if msg_type is None or msg_type == 'Message':
+            return 'self._%s = deserialize_inline(bfr).ok();' % abbrev
+        else:
+            return ('self._%s = deserialize_inline_as::<' + msg_type + '>' + '(bfr).ok();') % abbrev
+    elif xtype == 'message-list':
+        if msg_type is None or msg_type == 'Message':
+            return 'self._%s = deserialize_message_list(bfr)?;' % abbrev
+        else:
+            return ('self._%s = deserialize_message_list_as::<' + msg_type + '>' + '(bfr)?;') % abbrev
+    else:
+        return 'self._' + get_name(field) + ' = bfr.get_' + get_rust_types(root, field) + '_le();'
 
 
 def get_field_initial_value(root, field_node):
