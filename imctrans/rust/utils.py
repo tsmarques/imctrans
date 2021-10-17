@@ -87,7 +87,6 @@ def get_rust_copyright(xml_md5, skip_md5=False):
         result.append(('// IMC XML MD5: ' + xml_md5).ljust(len(result[0]) - 1) + '*')
         result.append(result[0])
 
-    result.append("\n/// Author: Tiago Sá Marques <tmarques@oceanscan-mst.com>")
     return '\n'.join(result) + '\n'
 
 
