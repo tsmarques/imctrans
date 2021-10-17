@@ -77,55 +77,6 @@ def get_rust_copyright(xml_md5, skip_md5=False):
     return '\n'.join(result) + '\n'
 
 
-def beautify(text):
-    """Cleanup and indent source file."""
-    indent = 0
-    blank = False
-    list0 = []
-
-    # Remove extra empty lines and indent.
-    lines = text.splitlines()
-    for line in lines:
-        strip = line.strip()
-        if len(strip) == 0:
-            if blank:
-                continue
-            else:
-                blank = True
-                list0.append('')
-                continue
-        else:
-            blank = False
-
-        if strip == '};' and len(list0[-1]) == 0:
-            list0.pop()
-
-        if strip == '{':
-            list0.append(' ' * indent + strip)
-            indent += 2
-        elif strip == '}' or strip == '};':
-            indent -= 2
-            list0.append(' ' * indent + strip)
-        elif strip == 'public:' or strip == 'protected:' or strip == 'public:':
-            list0.append(' ' * (indent - 2) + strip)
-        else:
-            list0.append(' ' * indent + strip)
-
-    # Remove empty lines between blocks.
-    list1 = []
-    for line in list0:
-        strip = line.strip()
-        if (strip == '}' or strip == '};') and len(list1[-1]) == 0:
-            list1.pop()
-        list1.append(line)
-
-    # Remove extra empty lines at EOF.
-    while len(list1[-1]) == 0:
-        list1.pop()
-
-    return '\n'.join(list1) + '\n'
-
-
 def abbrev_to_var(abbrev, prefix=''):
     """Convert camel case abbrev to proper variable name."""
     name = ''
@@ -197,24 +148,44 @@ def get_msg_groups(root, abbrev):
     return []
 
 
+def get_msg_type(root, field):
+    msg_type = field.get('message-type')
+    if msg_type is None:
+        return None
+    elif msg_type == 'Message':
+        return 'Message'
+
+    is_group = False
+    groups = root.findall("message-groups/message-group")
+    for group in groups:
+        if msg_type == group.get('abbrev'):
+            is_group = True
+            break
+
+    if not is_group:
+        return msg_type
+    else:
+        return 'Message'
+
+
 def get_rust_types(root, field_node):
     """Retrieve the Rust type of a message field node"""
     xtype = field_node.get('type')
-    msg_type = field_node.get('message-type', 'Message')
+    msg_type = get_msg_type(root, field_node)
     if xtype == 'plaintext':
         return 'String'
     elif xtype == 'rawdata':
         return 'Vec<u8>'
     elif xtype == 'message':
-        if len(get_msg_groups(root, msg_type)) == 0:
-            return 'Option<Box<%s>>' % msg_type
-        else:
+        if msg_type is None or msg_type == 'Message':
             return 'Option<Box<dyn Message>>'
-    elif xtype == 'message-list':
-        if len(get_msg_groups(root, msg_type)) == 0:
-            return 'MessageList<Box<%s>>' % msg_type
         else:
+            return 'Option<%s>' % msg_type
+    elif xtype == 'message-list':
+        if msg_type is None or msg_type == 'Message':
             return 'MessageList<Box<dyn Message>>'
+        else:
+            return 'MessageList<%s>' % msg_type
     elif xtype == 'fp64_t':
         return 'f64'
     elif xtype == 'fp32_t':
@@ -452,11 +423,15 @@ class Function:
         self._private = private
         self._crate_public = crate_public
         self._args_str = ''
+        self._where = []
 
         if self._is_method and self._const:
-            self._args_str = '&mut self, '
+            self._args_str = '&self'
         elif self._is_method:
-            self._args_str = '&self, '
+            self._args_str = '&mut self'
+
+        if self._is_method and self._args is not None:
+            self._args_str += ', '
 
         if self._args is not None:
             self._args_str += ', '.join([v.as_func_arg() for v in self._args])
@@ -466,6 +441,9 @@ class Function:
 
     def body(self, text):
         self._body = text
+
+    def where(self, cond):
+        self._where.append(cond)
 
     def add_body(self, text):
         self._body += text + '\n'
@@ -487,9 +465,6 @@ class Function:
         if self._inline:
             out += '#[inline(always)]\n'
 
-        if self._static:
-            out += 'static '
-
         if self._private:
             out += "fn "
         elif self._crate_public:
@@ -502,7 +477,13 @@ class Function:
         else:
             rett_str = ''
 
-        return out + self._name + '(' + self._args_str + ')' + rett_str + ' {\n' + self._body + '\n}\n'
+        where_str = ''
+        if len(self._where) != 0:
+            where_str = "where "
+            where_str += ',\n'.join(self._where)
+
+        return out + self._name + '(' + self._args_str + ')' \
+               + rett_str + ' ' + where_str + ' {\n' + self._body + '\n}\n'
 
 
 class Dependencies:
@@ -538,7 +519,7 @@ class Dependencies:
 
 
 class File:
-    def __init__(self, name, folder, ns, stdout=False, md5=None, skip_md5=False):
+    def __init__(self, name, folder, ns=False, stdout=False, md5=None, skip_md5=False):
         self.path = os.path.join(folder, name)
         self.path_file = os.path.split(self.path)[1]
         self.path_ext = os.path.splitext(self.path)[1]
@@ -578,11 +559,8 @@ class File:
     def add_imc_mod(self, mod):
         self.imc_mods.append(mod)
 
-    def add_imc_headers(self, *headers):
-        self.imc_hdrs += ['IMC/' + h for h in headers]
-
     def add_imc_header(self, header):
-        self.imc_hdrs.append('IMC/' + header)
+        self.imc_hdrs.append(header)
 
     def add_local_headers(self, *headers):
         self.local_hdrs += headers
@@ -612,14 +590,13 @@ class File:
             text += "pub mod " + imc_mod + ';\n'
 
         if len(self.rust_hdrs) > 0:
-            for hdr in self.rust_hdrs:
-                type(hdr)
+            for hdr in set(self.rust_hdrs):
                 text += "use " + hdr + ";\n"
             text += '\n'
 
         if len(self.imc_hdrs) > 0:
-            for hdr in self.imc_hdrs:
-                text += 'use crate:: ' + hdr + ';\n'
+            for hdr in set(self.imc_hdrs):
+                text += 'use crate::' + hdr + ';\n'
             text += '\n'
 
         if self._ns:
