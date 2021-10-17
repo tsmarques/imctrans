@@ -91,7 +91,6 @@ class Message:
 
         # base constructor
         fn_new = utils.Function('new', rett=node.get('abbrev'))
-        fn_new.where("Self: Sized")
         constructor_body = 'let msg = ' + node.get('abbrev') + ' {\n'
         constructor_body += ',\n'.join(s.get_default_initialization()) + '\n'
         constructor_body += '};\n\n'
@@ -100,12 +99,10 @@ class Message:
 
         # static id
         fn_stid = utils.Function(name='static_id', rett='u16', inline=True)
-        fn_stid.where("Self: Sized")
         fn_stid.add_body(node.get('id'))
 
         # id
         fn_id = utils.Function(name='id', is_method=True, const=True, rett='u16', inline=True)
-        fn_id.where("Self: Sized")
         fn_id.add_body(node.get('id'))
 
         # Get header
