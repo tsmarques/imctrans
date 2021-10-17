@@ -48,6 +48,18 @@ def comment(text, dox=True, nl='\n'):
         c = '/'
     return '//' + c + ' ' + text + '.' + nl
 
+def get_description(desc_tag):
+    if desc_tag is None:
+        return ''
+
+    desc = ''
+    parts = [line.strip() for line in desc_tag.text.split('\n')]
+    for line in parts:
+        if len(line) == 0:
+            continue
+        desc += '/// ' + line + '\n'
+
+    return desc
 
 def get_rust_copyright(xml_md5, skip_md5=False):
     """Extract copyright from this script and convert it to a format suitable to be used in C++ files."""
@@ -331,7 +343,7 @@ class Struct:
         return ret
 
     def __str__(self):
-        out = comment(self._desc)
+        out = self._desc
         out += '\n'.join([f for f in self._properties]) + '\n'
         out += 'pub struct ' + self._name + '\n'
         out += '{\n'
@@ -525,6 +537,7 @@ class File:
         self.path_ext = os.path.splitext(self.path)[1]
         self.name = os.path.splitext(self.path_file)[0]
         self._macros = []
+        self._crate_mods = []
         self.custom_types = {}
         self.imc_mods = []
         self.rust_hdrs = []
@@ -556,6 +569,9 @@ class File:
     def add_rust_header(self, header):
         self.rust_hdrs.append(header)
 
+    def add_crate_mod(self, mod):
+        self._crate_mods.append(mod)
+
     def add_imc_mod(self, mod):
         self.imc_mods.append(mod)
 
@@ -580,6 +596,10 @@ class File:
             text += str(macro) + "\n"
 
         text += '\n' + get_rust_copyright(self.md5, self._skip_md5) + '\n'
+
+        text += "/// Base\n"
+        for crate_mod in self._crate_mods:
+            text += "pub mod " + crate_mod + ';\n'
 
         for k, v in self.custom_types.items():
             text += "pub type " + k + " = " + v + ";\n"

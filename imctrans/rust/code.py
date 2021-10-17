@@ -49,11 +49,36 @@ class Message:
         if has_msg_field:
             rs.add_imc_header('DUNE_IMC_CONST_NULL_ID')
 
+        # Process inline enumerations.
+        iens = node.findall("field[@unit='Enumerated']")
+        for ien in iens:
+            if ien.get('enum-def', None) is not None:
+                continue
+            enum = utils.Enum(utils.get_enum_name(ien.get('name')), ien.get('name'))
+            enum.add_property("#[allow(non_camel_case_types)]")
+            for field in ien.findall('value'):
+                name = ien.get('prefix') + '_' + field.get('abbrev')
+                enum.add_field(utils.EnumField(name, field.get('id'), field.get('name')))
+            rs.append(enum)
+
+        # Process inline bitfields.
+        bfs = node.findall("field[@unit='Bitfield']")
+        for bf in bfs:
+            if bf.get('bitfield-def', None) is not None:
+                continue
+            enum = utils.Bitfield(utils.get_bfield_name(bf.get('name')), bf.get('name'))
+            enum.add_property("#[allow(non_camel_case_types)]")
+            for field in bf.findall('value'):
+                name = bf.get('prefix') + '_' + field.get('abbrev')
+                enum.add_field(utils.BitfieldField(name, field.get('id'), field.get('name'), "u32"))
+            rs.append(enum)
+
         # message struct
-        s = utils.Struct(name=node.get('abbrev'), desc=node.get('name'))
+        desc_tag = node.find('description')
+        s = utils.Struct(name=node.get('abbrev'), desc=utils.get_description(desc_tag))
         s.add_property("#[derive(Default)]")
 
-        s.add_field(utils.StructField('header', 'Header', 'lala', 'Header::new(' + node.get('id') + ')'))
+        s.add_field(utils.StructField('header', 'Header', 'Message Header', 'Header::new(' + node.get('id') + ')'))
         for field in fields:
             s.add_field(utils.StructField(field.get('abbrev'),
                                           utils.get_rust_types(root, field),
@@ -110,7 +135,8 @@ class Message:
                 xtype = field.get('type')
                 abbrev = field.get('abbrev')
                 if xtype == 'uint8_t' or xtype == 'int8_t':
-                    fn_serialize.add_body('bfr.put_' + utils.get_rust_types(root, field) + '(' + 'self._' + utils.get_name(field) + ');')
+                    fn_serialize.add_body(
+                        'bfr.put_' + utils.get_rust_types(root, field) + '(' + 'self._' + utils.get_name(field) + ');')
                 elif xtype == 'plaintext':
                     fn_serialize.add_body('serialize_bytes!(bfr, self._%s.as_bytes());' % abbrev)
                 elif xtype == 'rawdata':
@@ -120,19 +146,22 @@ class Message:
                 elif xtype == 'message-list':
                     fn_serialize.add_body('serialize_message_list!(bfr, self._%s);' % abbrev)
                 else:
-                    fn_serialize.add_body('bfr.put_' + utils.get_rust_types(root, field) + '_le(self._' + utils.get_name(field) + ');')
+                    fn_serialize.add_body(
+                        'bfr.put_' + utils.get_rust_types(root, field) + '_le(self._' + utils.get_name(field) + ');')
         else:
             fn_serialize.add_body('')
 
         fn_arg = utils.Var(name='bfr', xtype='&mut dyn bytes::Buf')
-        fn_deserialize = utils.Function(name='deserialize_fields', rett='Result<(), ImcError>', is_method=True, const=False, args=[fn_arg])
+        fn_deserialize = utils.Function(name='deserialize_fields', rett='Result<(), ImcError>', is_method=True,
+                                        const=False, args=[fn_arg])
         if self.has_fields():
             for field in node.findall('field'):
                 xtype = field.get('type')
                 abbrev = field.get('abbrev')
                 msg_type = utils.get_msg_type(root, field)
                 if xtype == 'uint8_t' or xtype == 'int8_t':
-                    fn_deserialize.add_body('self._' + utils.get_name(field) + ' = bfr.get_' + utils.get_rust_types(root, field) + '();')
+                    fn_deserialize.add_body(
+                        'self._' + utils.get_name(field) + ' = bfr.get_' + utils.get_rust_types(root, field) + '();')
                 elif xtype == 'plaintext':
                     fn_deserialize.add_body('deserialize_string!(bfr, self._%s);' % abbrev)
                 elif xtype == 'rawdata':
@@ -141,14 +170,17 @@ class Message:
                     if msg_type is None or msg_type == 'Message':
                         fn_deserialize.add_body('self._%s = deserialize_inline(bfr).ok();' % abbrev)
                     else:
-                        fn_deserialize.add_body(('self._%s = deserialize_inline_as::<' + msg_type + '>' + '(bfr).ok();') % abbrev)
+                        fn_deserialize.add_body(
+                            ('self._%s = deserialize_inline_as::<' + msg_type + '>' + '(bfr).ok();') % abbrev)
                 elif xtype == 'message-list':
                     if msg_type is None or msg_type == 'Message':
                         fn_deserialize.add_body('self._%s = deserialize_message_list(bfr)?;' % abbrev)
                     else:
-                        fn_deserialize.add_body(('self._%s = deserialize_message_list_as::<' + msg_type + '>' + '(bfr)?;') % abbrev)
+                        fn_deserialize.add_body(
+                            ('self._%s = deserialize_message_list_as::<' + msg_type + '>' + '(bfr)?;') % abbrev)
                 else:
-                    fn_deserialize.add_body('self._' + utils.get_name(field) + ' = bfr.get_' + utils.get_rust_types(root, field) + '_le();')
+                    fn_deserialize.add_body(
+                        'self._' + utils.get_name(field) + ' = bfr.get_' + utils.get_rust_types(root, field) + '_le();')
         else:
             fn_deserialize.add_body('')
 
@@ -475,7 +507,7 @@ def gen_message_files(consts, dest_folder, root, abbrevs, xml_md5):
             if dep not in groups:
                 rs.add_imc_header(dep + "::" + dep)
 
-    # @fixme not using supertypes for now
+        # @fixme not using supertypes for now
         # for group in utils.get_msg_groups(root, abbrev):
         #     rs.add_imc_header("%s/%s.hpp" % (utils.SPEC_FOLDER, group))
 
@@ -496,7 +528,8 @@ def gen_header_file(root, xml_md5, dest_folder, fname):
     f = utils.File(fname, dest_folder + '/src', ns=False, md5=xml_md5)
     f.add_rust_header("bytes::BufMut")
 
-    s = utils.Struct('Header', 'Header format')
+    desc_tag = root.find('header').find('description')
+    s = utils.Struct('Header', desc=utils.get_description(desc_tag))
     s.add_property("#[derive(Default, PartialEq, Debug)]")
 
     fields = root.findall("header/field")
@@ -642,11 +675,11 @@ def gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5):
     f.add_macro("#![allow(non_snake_case)]")
     f.add_macro("#![allow(dead_code)]")
 
-    f.add_imc_mod("Header")
-    f.add_imc_mod("Message")
-    f.add_imc_mod("MessageGroup")
-    f.add_imc_mod("factory")
-    f.add_imc_mod("packet")
+    f.add_crate_mod("Header")
+    f.add_crate_mod("Message")
+    f.add_crate_mod("MessageGroup")
+    f.add_crate_mod("factory")
+    f.add_crate_mod("packet")
 
     f.add_custom_type("MessageList<T>", "Vec<T>")
 
