@@ -97,26 +97,78 @@ class Message:
         constructor_body += 'msg'
         fn_new.add_body(constructor_body)
 
+        functions.append(fn_new)
+
         # static id
         fn_stid = utils.Function(name='static_id', rett='u16', inline=True)
         fn_stid.add_body(node.get('id'))
+        functions.append(fn_stid)
 
         # id
         fn_id = utils.Function(name='id', is_method=True, const=True, rett='u16', inline=True)
         fn_id.add_body(node.get('id'))
+        functions.append(fn_id)
 
         # Get header
         fn_get_hdr = utils.Function(name='get_header', is_method=True, const=False, rett='&mut Header')
         fn_get_hdr.body("&mut self._header")
+        functions.append(fn_get_hdr)
+
+        msglist_fields = node.findall("field[@type='message-list']")
+        msg_fields = node.findall("field[@type='message']")
+        # override calls to implement nested callbacks
+        if len(msglist_fields) != 0 or len(msg_fields) != 0:
+            fn_var = utils.Var(name='ts', xtype='f64')
+            fn_set_timestamp = utils.Function('set_timestamp_secs', is_method=True, const=False, args=[fn_var])
+            fn_set_timestamp.add_body('self.get_header()._timestamp = ts;')
+
+            fn_var = utils.Var(name='src', xtype='u16')
+            fn_set_source = utils.Function('set_source', is_method=True, const=False, args=[fn_var])
+            fn_set_source.add_body('self.get_header()._src = src;')
+
+            fn_var = utils.Var(name='src_ent', xtype='u8')
+            fn_set_source_ent = utils.Function('set_source_ent', is_method=True, const=False, args=[fn_var])
+            fn_set_source_ent.add_body('self.get_header()._src_ent = src_ent;')
+
+            fn_var = utils.Var(name='dst', xtype='u16')
+            fn_set_destination = utils.Function('set_destination', is_method=True, const=False, args=[fn_var])
+            fn_set_destination.add_body('self.get_header()._dst = dst;')
+
+            fn_var = utils.Var(name='dst_ent', xtype='u8')
+            fn_set_destination_ent = utils.Function('set_destination_ent', is_method=True, const=False, args=[fn_var])
+            fn_set_destination_ent.add_body('self.get_header()._dst_ent = dst_ent;')
+
+            for f in msglist_fields:
+                fn_set_timestamp.add_body(utils.call_message_list_nested('set_timestamp_secs', f, ['ts']))
+                fn_set_source.add_body(utils.call_message_list_nested('set_source', f, ['src']))
+                fn_set_source_ent.add_body(utils.call_message_list_nested('set_source_ent', f, ['src_ent']))
+                fn_set_destination.add_body(utils.call_message_list_nested('set_destination', f, ['dst']))
+                fn_set_destination_ent.add_body(utils.call_message_list_nested('set_destination_ent', f, ['dst_ent']))
+
+            for f in msg_fields:
+                fn_set_timestamp.add_body(utils.call_inline_nested('set_timestamp_secs', f, ['ts']))
+                fn_set_source.add_body(utils.call_inline_nested('set_source', f, ['src']))
+                fn_set_source_ent.add_body(utils.call_inline_nested('set_source_ent', f, ['src_ent']))
+                fn_set_destination.add_body(utils.call_inline_nested('set_destination', f, ['dst']))
+                fn_set_destination_ent.add_body(utils.call_inline_nested('set_destination_ent', f, ['dst_ent']))
+
+            functions.append(fn_set_timestamp)
+            functions.append(fn_set_source)
+            functions.append(fn_set_source_ent)
+            functions.append(fn_set_destination)
+            functions.append(fn_set_destination_ent)
 
         # clear
         fn_clear = utils.Function(name='clear', is_method=True, const=False)
         fn_clear.body(';\n'.join('self.' + f for f in s.get_reset()) + '\n')
+        functions.append(fn_clear)
 
         # Get fixed serialization size
         fn_fixed_sersize = utils.Function('fixed_serialization_size', is_method=True, rett='usize', inline=True)
         fn_fixed_sersize.body(str(self.get_fixed_size()))
+        functions.append(fn_fixed_sersize)
 
+        # Get dynamic serialization size
         fn_var_sersize = utils.Function('dynamic_serialization_size', is_method=True, rett='usize', inline=True)
         var_size = self.get_variable_size()
         if len(var_size) != 0:
@@ -125,6 +177,8 @@ class Message:
                                 'dyn_size')
         else:
             fn_var_sersize.body('0\n')
+
+        functions.append(fn_var_sersize)
 
         # Serialize fields
         if self.has_fields():
@@ -139,6 +193,9 @@ class Message:
         else:
             fn_serialize.add_body('')
 
+        functions.append(fn_serialize)
+
+        # Deserialize fields
         if self.has_fields():
             fn_arg = utils.Var(name='bfr', xtype='&mut dyn bytes::Buf')
         else:
@@ -152,15 +209,6 @@ class Message:
             fn_deserialize.add_body('')
 
         fn_deserialize.add_body('Ok(())')
-
-        functions.append(fn_new)
-        functions.append(fn_stid)
-        functions.append(fn_id)
-        functions.append(fn_get_hdr)
-        functions.append(fn_clear)
-        functions.append(fn_fixed_sersize)
-        functions.append(fn_var_sersize)
-        functions.append(fn_serialize)
         functions.append(fn_deserialize)
 
         rs.append(str(s))

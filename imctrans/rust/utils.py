@@ -314,6 +314,16 @@ def call_message_list_function(name, func, args):
     return name + '.' + func + '(' + args + ');\n'
 
 
+def call_message_list_nested(func, field, args):
+    return 'for m in &mut self._' + field.get('abbrev') + ' {\n'+ \
+           'm.' + func + '(' + ','.join(args) + ');\n}'
+
+
+def call_inline_nested(func, field, args):
+    return 'if let Some(m) = &mut self._' + field.get('abbrev') + ' {\n' \
+                'm.' + func + '(' + ','.join(args) + ');\n}'
+
+
 class Macro:
     def __init__(self, name, value, desc):
         self._data = {'name': 'IMC_' + name, 'value': value, 'desc': desc}
