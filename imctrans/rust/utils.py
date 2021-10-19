@@ -42,11 +42,20 @@ def get_name(node):
 
 
 def comment(text, dox=True, nl='\n'):
-    """Convert text to C++ comment."""
+    """Convert text to rust comment."""
+    if text is None:
+        return ''
     c = ''
-    if dox:
-        c = '/'
-    return '//' + c + ' ' + text + '.' + nl
+    c_str = ''
+    for line in text.split('\n'):
+        line = line.strip()
+        if len(line) == 0:
+            continue
+        if dox:
+            c = '/'
+        c_str += '//' + c + ' ' + line + nl
+
+    return c_str
 
 
 def get_description(desc_tag):
@@ -322,15 +331,6 @@ def call_message_list_nested(func, field, args):
 def call_inline_nested(func, field, args):
     return 'if let Some(m) = &mut self._' + field.get('abbrev') + ' {\n' \
                 'm.' + func + '(' + ','.join(args) + ');\n}'
-
-
-class Macro:
-    def __init__(self, name, value, desc):
-        self._data = {'name': 'IMC_' + name, 'value': value, 'desc': desc}
-
-    def __str__(self):
-        return comment(self._data['desc']) + \
-               '#define %(name)s %(value)s' % self._data
 
 
 class Var:

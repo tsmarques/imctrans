@@ -82,9 +82,12 @@ class Message:
 
         s.add_field(utils.StructField('header', 'Header', 'Message Header', 'Header::new(' + node.get('id') + ')'))
         for field in fields:
+            desc = field.find('description')
+            if desc is not None:
+                desc = desc.text
             s.add_field(utils.StructField(field.get('abbrev'),
                                           utils.get_rust_types(root, field),
-                                          field.get('name'),
+                                          desc,
                                           utils.get_field_initial_value(root, field)))
 
         functions = []
