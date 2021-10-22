@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 ############################################################################
-# Copyright 2017 OceanScan - Marine Systems & Technology, Lda.             #
+# Copyright 2021 OceanScan - Marine Systems & Technology, Lda.             #
 ############################################################################
 # Licensed under the Apache License, Version 2.0 (the "License");          #
 # you may not use this file except in compliance with the License.         #
