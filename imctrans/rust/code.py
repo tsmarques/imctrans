@@ -280,14 +280,6 @@ def gen_message_files(consts, dest_folder, root, abbrevs, xml_md5):
         rs.write()
 
 
-def gen_factory_file(root, xml_md5, dest_folder, fname):
-    f = utils.File(fname, dest_folder, ns=False, md5=xml_md5)
-    for msg in root.findall('message'):
-        f.append('MESSAGE(%s, %s, \"%s\")' % (msg.get('id'), msg.get('abbrev'), utils.xml_node_md5(msg)))
-    f.append('#undef MESSAGE')
-    f.write()
-
-
 def gen_header_file(root, xml_md5, dest_folder, fname):
     f = utils.File(fname, dest_folder + '/src', ns=False, md5=xml_md5)
     f.add_rust_header("bytes::BufMut")
@@ -341,18 +333,6 @@ def gen_header_file(root, xml_md5, dest_folder, fname):
 
     # end impl block
     f.text += '}\n'
-    f.write()
-
-
-def gen_constants_file(consts, xml_md5, specs_folder, fname):
-    f = utils.File(fname, specs_folder, ns=False, md5=xml_md5)
-    f.append(utils.Macro('CONST_VERSION', '"%(version)s"' % consts, 'IMC version string'))
-    f.append(utils.Macro('CONST_GIT_INFO', '"%(git_info)s"' % consts, 'Git repository information'))
-    f.append(utils.Macro('CONST_MD5', '"%(md5)s"' % consts, 'MD5 sum of XML specification file'))
-    f.append(utils.Macro('CONST_SYNC', consts['sync'], 'Synchronization number'))
-    f.append(utils.Macro('CONST_SYNC_REV', consts['sync_rev'], 'Reversed synchronization number'))
-    f.append(utils.Macro('CONST_HEADER_SIZE', consts['header_size'], 'Size of the header in bytes'))
-    f.append(utils.Macro('CONST_FOOTER_SIZE', consts['footer_size'], 'Size of the footer in bytes'))
     f.write()
 
 
@@ -437,6 +417,66 @@ def gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5):
     f.write()
 
 
+def gen_factory_file(dest_folder, root, xml_md5):
+    f = utils.File("src/factory.rs", dest_folder, ns=False, md5=xml_md5)
+    f.add_imc_header("Header::Header")
+    f.add_imc_header("Message::Message")
+    # so that we don't need to include all messages
+    f.add_imc_header("*")
+
+    fn_arg = utils.Var(name='hdr', xtype='Header')
+    fn_buildfrom = utils.Function(name='buildFrom<T :Message>', rett='Option<T>', args=[fn_arg], private=False)
+    fn_buildfrom.add_body("let mut msg: T = T::new();\n"
+                          "if msg.id() != hdr._mgid {\n"
+                          "return Option::None;\n"
+                          "}\n"
+                          "msg.get_header()._mgid = hdr._mgid;\n"
+                          "msg.get_header()._sync = hdr._sync;\n"
+                          "msg.get_header()._size = hdr._size;\n"
+                          "msg.get_header()._timestamp = hdr._timestamp;\n"
+                          "msg.get_header()._src = hdr._src;\n"
+                          "msg.get_header()._src_ent = hdr._src_ent;\n"
+                          "msg.get_header()._dst = hdr._dst;\n"
+                          "msg.get_header()._dst_ent = hdr._dst_ent;\n"
+                          "Option::Some(msg)\n")
+
+    f.append(fn_buildfrom)
+
+    fn_arg = utils.Var(name='hdr', xtype='Header')
+    fn_build = utils.Function(name='build', rett='Option<Box<dyn Message>>', args=[fn_arg], private=False)
+    fn_build.add_body("let ret = buildFromId(hdr._mgid);\n"
+                      "if ret.is_none() {\n"
+                      "return ret;\n"
+                      "}\n\n"
+                      "let mut msg = ret.unwrap();\n"
+                      "msg.get_header()._dst = hdr._dst;\n"
+                      "msg.get_header()._size = hdr._size;\n"
+                      "msg.get_header()._sync = hdr._sync;\n"
+                      "msg.get_header()._src = hdr._src;\n"
+                      "msg.get_header()._dst_ent = hdr._dst_ent;\n"
+                      "msg.get_header()._src_ent = hdr._src_ent;\n"
+                      "msg.get_header()._timestamp = hdr._timestamp;\n\n"
+                      "return Option::from(msg);\n")
+
+    f.append(fn_build)
+
+    fn_arg = utils.Var(name='id', xtype='u16')
+    fn_buildfid = utils.Function(name='buildFromId', rett='Option<Box<dyn Message>>', args=[fn_arg], private=False)
+    fn_buildfid.add_body("match id {\n")
+
+    for msg in root.findall('message'):
+        mid = msg.get('id')
+        abbrev = msg.get('abbrev')
+        fn_buildfid.add_body(mid + ' => ' + 'Option::Some(Box::new(' + abbrev + "::" + abbrev + "::new())),")
+
+    fn_buildfid.add_body("_ => Option::None,")
+    fn_buildfid.add_body("}\n")
+
+    f.append(fn_buildfid)
+
+    f.write()
+
+
 def main(xml, out_folder, no_base, force):
     xml_md5 = utils.compute_md5(xml)
     dest_folder = out_folder
@@ -483,7 +523,7 @@ def main(xml, out_folder, no_base, force):
 
     gen_lib_file(consts, dest_folder, root, abbrevs, xml_md5)
     gen_header_file(root, xml_md5, dest_folder, 'Header.rs')
-
     gen_message_files(consts, dest_folder, root, abbrevs, xml_md5)
+    gen_factory_file(dest_folder, root, xml_md5)
     # if not no_base:
     #     base.install(base_folder)
