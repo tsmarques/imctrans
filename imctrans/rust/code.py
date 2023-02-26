@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 ############################################################################
-# Copyright 2021 OceanScan - Marine Systems & Technology, Lda.             #
-############################################################################
 # Licensed under the Apache License, Version 2.0 (the "License");          #
 # you may not use this file except in compliance with the License.         #
 # You may obtain a copy of the License at                                  #
@@ -82,7 +80,6 @@ class Message:
 
         s.add_field(utils.StructField('header', 'Header', 'Message Header', 'Header::new(' + node.get('id') + ')'))
         for field in fields:
-            print(field.get('abbrev'))
             desc = field.find('description')
             if desc is not None:
                 desc = desc.text
