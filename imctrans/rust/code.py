@@ -82,6 +82,7 @@ class Message:
 
         s.add_field(utils.StructField('header', 'Header', 'Message Header', 'Header::new(' + node.get('id') + ')'))
         for field in fields:
+            print(field.get('abbrev'))
             desc = field.find('description')
             if desc is not None:
                 desc = desc.text
@@ -235,7 +236,7 @@ class Message:
         size = []
         for field in self._node.findall('field'):
             xtype = field.get('type')
-            abbrev = utils.get_name(field)
+            abbrev = field.get('abbrev')
             if xtype == 'plaintext' or xtype == 'rawdata':
                 size.append('dyn_size += self._%s.len() + 2' % abbrev)
             elif xtype == 'message':
@@ -249,7 +250,7 @@ class Message:
         ret = []
         for field in self._node.findall('field'):
             if field.get('type') in self._consts['variable_types']:
-                ret.append(utils.get_name(field))
+                ret.append(field.get('abbrev'))
         return ret
 
     def has_fields(self):

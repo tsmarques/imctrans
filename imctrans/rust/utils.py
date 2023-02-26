@@ -36,11 +36,6 @@ def get_bfield_name(name):
     return name.replace(' ', '') + 'Bits'
 
 
-def get_name(node):
-    """Retrieve the name of a field."""
-    return node.get('abbrev').lower()
-
-
 def comment(text, dox=True, nl='\n'):
     """Convert text to rust comment."""
     if text is None:
@@ -62,7 +57,6 @@ def get_description(desc_tag):
     if desc_tag is None:
         return ''
 
-    print(desc_tag.text)
     desc = ''
     if desc_tag.text != None:
         parts = [line.strip() for line in desc_tag.text.split('\n')]
@@ -238,7 +232,7 @@ def get_field_serialization(root, field):
     xtype = field.get('type')
     abbrev = field.get('abbrev')
     if xtype == 'uint8_t' or xtype == 'int8_t':
-        return 'bfr.put_' + get_rust_types(root, field) + '(' + 'self._' + get_name(field) + ');'
+        return 'bfr.put_' + get_rust_types(root, field) + '(' + 'self._' + abbrev + ');'
     elif xtype == 'plaintext':
         return 'serialize_bytes!(bfr, self._%s.as_bytes());' % abbrev
     elif xtype == 'rawdata':
@@ -248,7 +242,7 @@ def get_field_serialization(root, field):
     elif xtype == 'message-list':
         return 'serialize_message_list!(bfr, self._%s);' % abbrev
     else:
-        return 'bfr.put_' + get_rust_types(root, field) + '_le(self._' + get_name(field) + ');'
+        return 'bfr.put_' + get_rust_types(root, field) + '_le(self._' + abbrev + ');'
 
 
 def get_field_deserialization(root, field):
@@ -256,7 +250,7 @@ def get_field_deserialization(root, field):
     abbrev = field.get('abbrev')
     msg_type = get_msg_type(root, field)
     if xtype == 'uint8_t' or xtype == 'int8_t':
-        return 'self._' + get_name(field) + ' = bfr.get_' + get_rust_types(root, field) + '();'
+        return 'self._' + abbrev + ' = bfr.get_' + get_rust_types(root, field) + '();'
     elif xtype == 'plaintext':
         return 'deserialize_string!(bfr, self._%s);' % abbrev
     elif xtype == 'rawdata':
@@ -272,7 +266,7 @@ def get_field_deserialization(root, field):
         else:
             return ('self._%s = deserialize_message_list_as::<' + msg_type + '>' + '(bfr)?;') % abbrev
     else:
-        return 'self._' + get_name(field) + ' = bfr.get_' + get_rust_types(root, field) + '_le();'
+        return 'self._' + abbrev + ' = bfr.get_' + get_rust_types(root, field) + '_le();'
 
 
 def get_field_initial_value(root, field_node):
