@@ -62,12 +62,14 @@ def get_description(desc_tag):
     if desc_tag is None:
         return ''
 
+    print(desc_tag.text)
     desc = ''
-    parts = [line.strip() for line in desc_tag.text.split('\n')]
-    for line in parts:
-        if len(line) == 0:
-            continue
-        desc += '/// ' + line + '\n'
+    if desc_tag.text != None:
+        parts = [line.strip() for line in desc_tag.text.split('\n')]
+        for line in parts:
+            if len(line) == 0:
+                continue
+            desc += '/// ' + line + '\n'
 
     return desc
 
