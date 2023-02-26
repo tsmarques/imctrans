@@ -3,8 +3,7 @@
 use crate::packet::ImcError;
 use crate::Header::Header;
 use crate::{IMC_CONST_FOOTER_SIZE, IMC_CONST_HEADER_SIZE};
-use bytes::BufMut;
-use crc16::{State, ARC};
+use std::any::Any;
 
 macro_rules! serialize_bytes {
     ($bfr:expr, $bytes_slice:expr) => {
@@ -34,25 +33,6 @@ macro_rules! inline_message_serialization_size {
             Some(msg) => {
                 $size += msg.payload_serialization_size();
             }
-        }
-    };
-}
-
-macro_rules! clear_message {
-    ($target_var:expr) => {
-        match &mut $target_var {
-            None => {}
-            Some(m) => {
-                m.clear();
-            }
-        }
-    };
-}
-
-macro_rules! clear_message_list {
-    ($target_var:expr) => {
-        for m in $target_var.iter_mut() {
-            m.clear();
         }
     };
 }
@@ -104,7 +84,7 @@ macro_rules! deserialize_bytes {
 
 /// Basic IMC Message
 /// @todo nested callbacks
-pub trait Message {
+pub trait Message: MessageClone {
     /// Default constructor
     fn new() -> Self
     where
@@ -117,6 +97,10 @@ pub trait Message {
 
     /// Retrieve message's identification number.
     fn id(&self) -> u16;
+
+    /// Boiler plate for down cast
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 
     /// Get a mutable reference to this message
     /// header
@@ -174,5 +158,26 @@ pub trait Message {
         self.payload_serialization_size()
             + IMC_CONST_HEADER_SIZE as usize
             + IMC_CONST_FOOTER_SIZE as usize
+    }
+}
+
+/// Rust dark magic to allow having "dyn Message" as a field
+/// on a struct that derives Clone (e.g. AcousticOperation.rs)
+pub trait MessageClone {
+    fn do_clone(&self) -> Box<dyn Message>;
+}
+
+impl<T> MessageClone for T
+where
+    T: 'static + Message + Clone,
+{
+    fn do_clone(&self) -> Box<dyn Message> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn Message> {
+    fn clone(&self) -> Box<dyn Message> {
+        self.do_clone()
     }
 }

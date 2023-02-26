@@ -31,6 +31,7 @@ class Message:
         rs.add_imc_header("Header::Header")
         rs.add_imc_header("packet::ImcError")
         rs.add_rust_header("bytes::BufMut")
+        rs.add_rust_header("std::any::Any")
 
         if self.has_fields():
             rs.add_imc_header("packet::*")
@@ -76,7 +77,7 @@ class Message:
         # message struct
         desc_tag = node.find('description')
         s = utils.Struct(name=node.get('abbrev'), desc=utils.get_description(desc_tag))
-        s.add_property("#[derive(Default)]")
+        s.add_property("#[derive(Default, Clone)]")
 
         s.add_field(utils.StructField('header', 'Header', 'Message Header', 'Header::new(' + node.get('id') + ')'))
         for field in fields:
@@ -109,6 +110,16 @@ class Message:
         fn_id = utils.Function(name='id', is_method=True, const=True, rett='u16', inline=True)
         fn_id.add_body(node.get('id'))
         functions.append(fn_id)
+
+        # fn as_any(&self) -> &Any;
+        fn_as_any = utils.Function(name="as_any", is_method=True, const=True, rett='&dyn Any')
+        fn_as_any.add_body('self');
+        functions.append(fn_as_any);
+
+        # fn as_any_mut(&mut self) -> &mut Any;
+        fn_as_any_mut = utils.Function(name="as_any_mut", is_method=True, const=False, rett='&mut dyn Any')
+        fn_as_any_mut.add_body('self');
+        functions.append(fn_as_any_mut)
 
         # Get header
         fn_get_hdr = utils.Function(name='get_header', is_method=True, const=False, rett='&mut Header')
@@ -284,7 +295,7 @@ def gen_header_file(root, xml_md5, dest_folder, fname):
 
     desc_tag = root.find('header').find('description')
     s = utils.Struct('Header', desc=utils.get_description(desc_tag))
-    s.add_property("#[derive(Default, PartialEq, Debug)]")
+    s.add_property("#[derive(Default, PartialEq, Debug, Clone)]")
 
     fields = root.findall("header/field")
     for field in fields:
